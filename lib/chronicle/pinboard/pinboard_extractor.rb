@@ -12,6 +12,8 @@ module Chronicle
       setting :access_token, required: true
 
       def prepare
+        raise(Chronicle::ETL::ExtractionError, "Access token is missing") if @config.access_token.empty?
+
         @bookmarks = load_bookmarks
         @username = @config.access_token.split(":").first
       end
