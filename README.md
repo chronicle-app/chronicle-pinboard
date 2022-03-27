@@ -13,11 +13,12 @@ Extract your Pinboard bookmarks using the command line with this plugin for [chr
 ## Usage
 
 ```sh
-gem install chronicle-etl
-chronicle-etl connectors:install pinboard
+$ gem install chronicle-etl
+$ chronicle-etl plugins:install pinboard
 
-# You can get PINBOARD_ACCESS_TOKEN from https://pinboard.in/settings/password
+# You can get a pinboard access token from https://pinboard.in/settings/password
+$ chronicle-etl secrets:set pinboard access_token PINBOARD_ACCESS_TOKEN
+
 # Extract pinboard bookmarks from the last 10 days
-chronicle-etl --extractor pinboard --extractor-opts access_token:$PINBOARD_ACCESS_TOKEN --since 10d
+$ chronicle-etl --extractor pinboard --since 10d
 ```
-
