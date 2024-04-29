@@ -1,98 +1,85 @@
 require 'chronicle/etl'
+require 'chronicle/models'
 
 module Chronicle
   module Pinboard
     class PinboardTransformer < Chronicle::ETL::Transformer
       register_connector do |r|
-        r.provider = 'pinboard'
-        r.description = 'bookmark from pinboard'
+        r.source = :pinboard
+        r.type = :bookmark
+        r.strategy = :api
+        r.description = 'a booknark from pinboard'
+        r.from_schema = :extraction
+        r.to_schema = :chronicle
       end
 
-      def transform
-        @bookmark = @extraction.data
-        build_liked
-      end
+      def transform(record)
+        site = build_site(record.data)
+        agent = build_agent(record.extraction.meta[:username])
+        id = record.data[:hash]
+        end_time = Time.parse(record.data[:time])
 
-      def timestamp
-        Time.parse(@bookmark[:time])
-      end
+        actions = []
 
-      def id
-        @bookmark[:hash]
+        actions << build_bookmark(site:, agent:, id:, end_time:)
+
+        note = record.data[:extended]
+        actions << build_comment(site:, agent:, id:, end_time:, note:) if note.size.positive?
+
+        actions.compact
       end
 
       private
 
-      def build_liked
-        record = ::Chronicle::ETL::Models::Activity.new
-        record.end_at = timestamp
-        record.verb = 'liked'
-        record.provider_id = id
-        record.provider = 'pinboard'
-        record.dedupe_on = [[:provider, :verb, :provider_id]]
+      def build_bookmark(site:, agent:, id:, end_time:)
+        Chronicle::Models::BookmarkAction.new do |r|
+          r.source = 'pinboard'
+          r.source_id = id
+          r.end_time = end_time
+          r.agent = agent
+          r.object = site
 
-        record.involved = build_bookmark
-        record.actor = build_actor
-
-        record
-      end
-
-      def build_bookmark
-        record = ::Chronicle::ETL::Models::Entity.new
-        record.title = @bookmark[:description]
-        record.provider_url = @bookmark[:href]
-        record.dedupe_on << [:provider_url]
-
-        record.abouts = build_tags
-
-        record.aboutables = build_note
-        record
-      end
-
-      def build_note
-        note = @bookmark[:extended]
-        return unless note.size.positive?
-
-        record = ::Chronicle::ETL::Models::Entity.new
-        record.provider_id = id
-        record.represents = "thought"
-        record.body = note
-        record.provider = "pinboard"
-        record.dedupe_on << [:represents, :provider, :provider_id]
-
-        involvement = ::Chronicle::ETL::Models::Activity.new
-        involvement.end_at = timestamp
-        involvement.verb = 'noted'
-        involvement.provider_id = id
-        involvement.provider = 'pinboard'
-        involvement.dedupe_on << [:provider, :verb, :provider_id]
-        involvement.actor = build_actor
-
-        record.involvements = [involvement]
-
-        record
-      end
-
-      def build_tags
-        @bookmark[:tags].split(" ").map do |tag|
-          record = ::Chronicle::ETL::Models::Entity.new
-          record.represents = 'topic'
-          record.provider = 'pinboard'
-          record.slug = tag.downcase
-          record.dedupe_on << [:provider, :slug, :represents]
-          record
+          r.dedupe_on = [%i[source source_id type]]
         end
       end
 
-      def build_actor
-        record = ::Chronicle::ETL::Models::Entity.new
-        record.represents = 'identity'
-        record.slug = @extraction.meta[:username] 
-        record.provider = 'pinboard'
-        record.provider_url = "https://pinboard.in/u:#{record.slug}"
-        record.dedupe_on << [:provider_url]
-        record.dedupe_on << [:provider, :represents, :slug]
-        record
+      def build_comment(site:, agent:, id:, note:, end_time:)
+        comment = Chronicle::Models::Comment.new do |r|
+          r.source = 'pinboard'
+          r.source_id = id
+          r.text = note
+          r.about = [site]
+          r.dedupe_on = [%i[source source_id type]]
+        end
+
+        Chronicle::Models::CommentAction.new do |r|
+          r.source = 'pinboard'
+          r.source_id = id
+          r.end_time = end_time
+          r.agent = agent
+          r.result = comment
+          r.object = site
+
+          r.dedupe_on = [%i[source source_id type]]
+        end
+      end
+
+      def build_site(bookmark)
+        Chronicle::Models::Thing.new do |r|
+          r.name = bookmark[:description]
+          r.url = bookmark[:href]
+          r.dedupe_on = [[:url]]
+          r.keywords = bookmark[:tags].split.map(&:strip)
+        end
+      end
+
+      def build_agent(username)
+        Chronicle::Models::Person.new do |r|
+          r.source = 'pinboard'
+          r.slug = username
+          r.url = "https://pinboard.in/u:#{username}"
+          r.dedupe_on = [[:url], %i[source slug type]]
+        end
       end
     end
   end

@@ -1,8 +1,6 @@
-# frozen_string_literal: true
-
-require_relative "pinboard/version"
-require_relative "pinboard/pinboard_extractor"
-require_relative "pinboard/pinboard_transformer"
+require_relative 'pinboard/version'
+require_relative 'pinboard/pinboard_extractor'
+require_relative 'pinboard/pinboard_transformer'
 
 module Chronicle
   module Pinboard
